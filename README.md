@@ -153,7 +153,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 **请求头：**
 ```
 Content-Type: multipart/form-data
-X-API-KEY: your-api-key-here
+Authorization:Bearer your-token
 ```
 
 **响应示例：**

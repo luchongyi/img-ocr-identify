@@ -1,17 +1,15 @@
 
 from paddle.base.core import GpuPassStrategy
 from paddleocr import PaddleOCR
-import shutil
-import os
 from fastapi import UploadFile
-import json
-import re
 import io
 from PIL import Image
 import numpy as np
 import time
 from fastapi import HTTPException
 from fastapi import UploadFile
+from langdetect import detect, DetectorFactory
+DetectorFactory.seed = 0  # 保证结果稳定
 
 
 ocr = PaddleOCR(
@@ -65,13 +63,49 @@ async def ocr_predict(file: UploadFile):
         img_np = preprocess_image(image_bytes)
         result = ocr.predict(img_np)
         rec_texts_list = extract_rec_texts(result)
+        # 语言检测
+        if rec_texts_list:
+            full_text = " ".join(rec_texts_list)
+            try:
+                lang = detect(full_text)
+            except Exception:
+                lang = None
+        else:
+            lang = None
         processing_time = time.time() - start
         print(f"OCR识别耗时：{processing_time:.2f}秒")
         return {
             "rec_texts": rec_texts_list,
+            "language": lang,
             "processing_time": f"{processing_time:.2f}秒",
             "text_count": len(rec_texts_list)
         }
     except Exception as e:
         print("OCR识别异常：", e)
         return {"error": str(e)}
+
+
+async def detect_image_language(file: UploadFile):
+    """
+    检测图片中文字的语言类型。
+    先通过OCR识别图片中的文本，再用langdetect库判断文本的主要语言。
+
+    参数：
+        file (UploadFile): 上传的图片文件
+    返回：
+        dict: 包含语言类型（language）、合并后的文本（text），如识别失败则返回错误信息
+    """
+    ocr_result = await ocr_predict(file)
+    texts = ocr_result.get("rec_texts", [])
+    if not texts:
+        return {"language": None, "confidence": 0, "text": ""}
+    full_text = " ".join(texts)
+    try:
+        lang = detect(full_text)
+        return {"language": lang, "text": full_text}
+    except Exception as e:
+
+        
+        
+        
+        return {"language": None, "error": str(e)}

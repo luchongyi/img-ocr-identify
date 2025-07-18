@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.services.ip_whitelist_service import IPWhitelistService
-from app.core.security import verify_api_key
+#from app.core.security import verify_api_key
+from app.core.security import get_current_user
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -29,7 +30,10 @@ class CacheInfoResponse(BaseModel):
     ttl_seconds: int
 
 @router.get("/whitelist/list", response_model=List[IPWhitelistResponse])
-async def list_whitelist_ips(db: AsyncSession = Depends(get_db)):
+async def list_whitelist_ips(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
     """获取所有IP白名单"""
     ips = await IPWhitelistService.get_all_whitelist_ips(db)
     return [IPWhitelistResponse(**ip) for ip in ips]
@@ -38,7 +42,7 @@ async def list_whitelist_ips(db: AsyncSession = Depends(get_db)):
 async def add_ip(
     request: IPWhitelistRequest,
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(verify_api_key)
+    current_user: dict = Depends(get_current_user)  # 新增
 ):
     """添加IP到白名单"""
     success = await IPWhitelistService.add_ip_to_whitelist(
@@ -59,7 +63,7 @@ async def add_ip(
 async def remove_ip(
     ip_address: str,
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(verify_api_key)
+    current_user: dict = Depends(get_current_user)  # 新增
 ):
     """从白名单中移除IP"""
     success = await IPWhitelistService.remove_ip_from_whitelist(db, ip_address)
@@ -76,7 +80,7 @@ async def update_ip_description(
     ip_address: str,
     request: IPWhitelistRequest,
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(verify_api_key)
+    current_user: dict = Depends(get_current_user)  # 新增
 ):
     """更新IP描述"""
     success = await IPWhitelistService.update_ip_description(
@@ -91,12 +95,15 @@ async def update_ip_description(
         )
 
 @router.post("/whitelist/refresh-cache")
-async def refresh_cache(db: AsyncSession = Depends(get_db), api_key: str = Depends(verify_api_key)):
+async def refresh_cache(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)  # 新增
+    ):
     """刷新IP白名单缓存"""
     await IPWhitelistService.refresh_cache(db)
     return {"success": True, "message": "缓存已刷新"}
 
-@router.get("/whitelist/cache-info", response_model=CacheInfoResponse)
-async def get_cache_info():
+@router.get("/whitelist/cache-info", response_model=CacheInfoResponse,)
+async def get_cache_info(current_user: dict = Depends(get_current_user)):
     """获取缓存信息"""
     return CacheInfoResponse(**IPWhitelistService.get_cache_info())

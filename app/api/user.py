@@ -1,13 +1,13 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
-from app.models.api_key import APIKey
 from app.models.user import User
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 import secrets
 import bcrypt
 from sqlalchemy import select
+from app.core.security import create_access_token
 
 router = APIRouter()
 
@@ -29,6 +29,11 @@ class LoginResponse(BaseModel):
     secret_key: str
     expires_at: datetime
 
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_at: datetime
+
 # @router.post("/register", response_model=RegisterResponse)
 # async def register(
 #     request: RegisterRequest,
@@ -48,7 +53,7 @@ class LoginResponse(BaseModel):
 #     await db.refresh(user)
 #     return RegisterResponse(id=user.id, username=user.username, created_at=user.created_at)
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login", response_model=TokenResponse)
 async def login(
     request: LoginRequest,
     db: AsyncSession = Depends(get_db)
@@ -63,16 +68,10 @@ async def login(
     # 校验密码
     if not bcrypt.checkpw(request.password.encode(), user.password_hash.encode()):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
-    # 生成密钥
-    key = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(hours=request.hours)
-    api_key = APIKey(
-        key=key,
-        description=f"{request.username}登录生成",
-        user_id=user.id,
-        expires_at=expires_at,
-        is_active=True
+    # 生成 JWT token
+    token, expire = create_access_token(
+        data={"sub": user.username, "user_id": user.id},
+        expires_delta=timedelta(hours=request.hours)
     )
-    db.add(api_key)
-    await db.commit()
-    return LoginResponse(secret_key=key, expires_at=expires_at) 
+    return TokenResponse(access_token=token, expires_at=expire) 
+    

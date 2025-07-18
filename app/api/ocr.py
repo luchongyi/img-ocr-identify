@@ -1,9 +1,12 @@
 from fastapi import APIRouter, UploadFile,Request
-from app.services.ocr_service import ocr_predict
+from app.services.ocr_service import ocr_predict, detect_image_language
 from fastapi import APIRouter, UploadFile, Request, Depends
-from app.core.security import verify_api_key
+#from app.core.security import verify_api_key
 from app.core.limiter import limiter
-
+from fastapi import Depends
+from app.core.security import get_current_user
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.db import get_db
 
 
 router = APIRouter()
@@ -13,11 +16,11 @@ router = APIRouter()
 async def ocr_api(
     request: Request, 
     file: UploadFile,
-    api_key: str = Depends(verify_api_key)  # 添加API密钥验证
+    current_user: dict = Depends(get_current_user)  # 新增
 ):
     return await ocr_predict(file)
-
 
 @router.get("/health")
 def health():
     return {"status": "ok"}
+    
